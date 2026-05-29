@@ -1,1 +1,69 @@
-  placeholder
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ArchiveTube</title>
+
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">ArchiveTube</div>
+  <input id="search" placeholder="Search videos..." />
+  <div class="settingsBtn" onclick="openSettings()">⚙</div>
+</header>
+
+<div id="grid" class="grid"></div>
+
+<div id="playerView">
+  <div class="back" onclick="back()">← Back</div>
+
+  <video id="player" controls></video>
+
+  <div id="videoMeta" class="videoMeta"></div>
+  <div id="videoDescription" class="description"></div>
+
+  <div id="fallbackLink"></div>
+
+  <div class="sectionTitle">Recommended (by subject)</div>
+  <div id="recommended" class="recGrid"></div>
+</div>
+
+<!-- SETTINGS -->
+<div id="modal" class="modal">
+  <div class="modalContent">
+    <h3>Settings</h3>
+
+    <label>Language</label>
+    <select id="lang">
+      <option value="">Auto</option>
+      <option value="en">English</option>
+      <option value="es">Spanish</option>
+      <option value="fr">French</option>
+      <option value="de">German</option>
+      <option value="ja">Japanese</option>
+      <option value="zh">Chinese</option>
+    </select>
+
+    <label style="margin-top:10px;">CORS Proxy</label>
+    <select id="proxyMode">
+      <option value="on">Enabled</option>
+      <option value="off">Disabled</option>
+    </select>
+
+    <input id="proxyURL" placeholder="https://uncors.vercel.app/" />
+
+    <button onclick="closeSettings()">Close</button>
+  </div>
+</div>
+
+<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
