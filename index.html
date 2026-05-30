@@ -33,7 +33,7 @@ header{
   color:white;
 }
 
-/* LAYOUT */
+/* GRID */
 #app{display:flex}
 #grid{
   flex:1;
@@ -43,27 +43,6 @@ header{
   padding:12px;
 }
 
-/* VIDEO PAGE (YOUTUBE STYLE) */
-#watchContainer{
-  max-width:900px;
-  margin:0 auto;
-  padding:12px;
-}
-
-#player{
-  width:100%;
-  max-height:60vh;
-  border-radius:12px;
-}
-
-#title{
-  font-size:20px;
-  font-weight:600;
-  margin-top:12px;
-  margin-bottom:8px;
-}
-
-/* CARDS */
 .card{cursor:pointer}
 .thumb{
   width:100%;
@@ -85,9 +64,28 @@ header{
 .recCard{margin-bottom:12px;cursor:pointer}
 .recThumb{width:100%;border-radius:8px}
 .recTitle{font-size:12px;margin-top:4px}
-.recUploader{font-size:11px;color:#888}
 
-/* INFO */
+/* WATCH PAGE */
+#watchContainer{
+  max-width:900px;
+  margin:0 auto;
+  padding:12px;
+  display:none;
+}
+
+#player{
+  width:100%;
+  max-height:60vh;
+  border-radius:12px;
+}
+
+#title{
+  font-size:20px;
+  font-weight:600;
+  margin-top:12px;
+  margin-bottom:8px;
+}
+
 #videoInfo{
   margin-top:10px;
   padding:12px;
@@ -98,7 +96,6 @@ header{
 .infoRow{color:#aaa;margin-bottom:5px}
 .desc{margin-top:10px;color:#ddd}
 
-/* BACK */
 #back{
   margin-top:12px;
   color:#3ea6ff;
@@ -144,8 +141,7 @@ header{
   </div>
 </div>
 
-<!-- WATCH PAGE -->
-<div id="watchContainer" style="display:none;">
+<div id="watchContainer">
   <video id="player" controls></video>
 
   <div id="title"></div>
@@ -159,7 +155,7 @@ header{
 
 <script>
 
-/* ================= INIT ================= */
+/* ================= ELEMENTS ================= */
 const grid=document.getElementById("grid");
 const sidebar=document.getElementById("sidebar");
 const recs=document.getElementById("recs");
@@ -173,19 +169,20 @@ const search=document.getElementById("search");
 let currentQuery="collection:opensource_movies";
 
 /* ================= WARNING ================= */
-alert("DuroTube Warning: Some archived content may be sensitive. Filtering is not perfect.");
+alert("DuroTube: Some archived content may be sensitive. Filtering is not perfect.");
 
-/* ================= BLOCKLIST ================= */
+/* ================= BLOCK ================= */
 const block=[
  "csam","child pornography","child sexual abuse material","cp",
  "lolicon","loli","shotacon","shota",
  "rape","forced sex","non-consensual sex",
- "hurtcore","guro","snuff","crush fetish","animal crush"
+ "hurtcore","guro","snuff",
+ "crush fetish","animal crush"
 ];
 
-const blocked=t=>block.some(x=>t.toLowerCase().includes(x));
+const isBlocked=t=>block.some(x=>t.toLowerCase().includes(x));
 
-/* ================= UI HELPERS ================= */
+/* ================= UI ================= */
 const show=()=>loader.style.display="flex";
 const hide=()=>loader.style.display="none";
 
@@ -212,18 +209,23 @@ async function fetchMeta(id){
 /* ================= FILTER ================= */
 function filter(items){
  return items.filter(v=>{
-  const text=`${v.title||""} ${v.description||""} ${v.creator||""} ${v.uploader||""}`;
-  return !blocked(text);
+  const t=`${v.title||""}${v.description||""}${v.creator||""}${v.uploader||""}`;
+  return !isBlocked(t);
  });
 }
 
 /* ================= ROUTING ================= */
 function route(){
  const h=decodeURIComponent(location.hash.replace("#",""));
-
- if(!h||h==="/"){loadHome();return}
-
  const p=h.split("/");
+
+ if(!h||h==="/"){
+  exitVideo();
+  loadHome();
+  return;
+ }
+
+ if(p[1] !== "video") exitVideo();
 
  if(p[1]==="video") loadVideo(p.slice(2).join("/"));
  if(p[1]==="search") loadSearch(p.slice(2).join(" "));
@@ -231,23 +233,39 @@ function route(){
 
 window.addEventListener("hashchange",route);
 
-/* ================= HOME ================= */
-async function loadHome(){
- show();
+/* ================= EXIT VIDEO (IMPORTANT) ================= */
+function exitVideo(){
+ try{
+  player.pause();
+ }catch{}
+
+ player.source=null;
+
  watch.style.display="none";
  sidebar.style.display="none";
  document.getElementById("app").style.display="flex";
 
+ titleEl.textContent="";
+ videoInfo.innerHTML="";
+ recs.innerHTML="";
+}
+
+/* ================= HOME ================= */
+async function loadHome(){
+ show();
+
  let items=await fetchVideos(currentQuery);
  items=filter(items);
+
  render(items);
+
  hide();
 }
 
 /* ================= SEARCH ================= */
 async function loadSearch(q){
  currentQuery=q||"collection:opensource_movies";
- return loadHome();
+ loadHome();
 }
 
 /* ================= GRID ================= */
@@ -312,10 +330,8 @@ async function loadVideo(id){
   };
  }
 
- /* TITLE */
  titleEl.textContent=m.title||"Untitled video";
 
- /* INFO */
  videoInfo.innerHTML=`
   <div class="infoRow">👤 ${m.uploader||"Unknown"}</div>
   <div class="infoRow">🎬 ${m.creator||"Unknown"}</div>
@@ -324,27 +340,30 @@ async function loadVideo(id){
   <div class="desc">${m.description||"No description"}</div>
  `;
 
- /* RECS */
- let recsData=await fetchVideos(m.subject||m.creator||"movies");
- recsData=filter(recsData);
- renderRecs(recsData);
+ let recData=[];
+ try{
+  recData=await fetchVideos(m.subject||m.creator||"movies");
+  recData=filter(recData);
+ }catch{}
+
+ renderRecs(recData);
 
  hide();
 }
 
 /* ================= BACK ================= */
 document.getElementById("back").onclick=()=>{
- location.hash="";
+ location.hash="#/";
 };
 
-/* ================= SEARCH INPUT ================= */
+/* ================= SEARCH ================= */
 search.addEventListener("input",e=>{
  location.hash=e.target.value
   ? `#/search/${encodeURIComponent(e.target.value)}`
   : "#/";
 });
 
-/* ================= START ================= */
+/* ================= INIT ================= */
 route();
 
 </script>
