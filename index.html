@@ -136,8 +136,6 @@ video{width:100%;border-radius:10px}
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
 <script>
-
-/* ================= ELEMENTS ================= */
 const grid = document.getElementById("grid");
 const sidebar = document.getElementById("sidebar");
 const recs = document.getElementById("recs");
@@ -147,15 +145,45 @@ const player = new Plyr("#player");
 const videoInfo = document.getElementById("videoInfo");
 const search = document.getElementById("search");
 
-/* ================= STATE ================= */
-let currentQuery = "collection:opensource_movies";
-let currentVideo = null;
-
-/* ================= LOADER ================= */
 const show = ()=>loader.style.display="flex";
 const hide = ()=>loader.style.display="none";
 
-/* ================= SAFETY FILTER ================= */
+let currentQuery = "collection:opensource_movies";
+
+/* ================= HASH ROUTER ================= */
+function setRoute(route){
+  location.hash = route;
+}
+
+function parseRoute(){
+  const h = decodeURIComponent(location.hash.replace("#",""));
+
+  if(!h || h === "/"){
+    return { type:"home" };
+  }
+
+  const parts = h.split("/");
+
+  if(parts[1] === "video"){
+    return { type:"video", id: parts.slice(2).join("/") };
+  }
+
+  if(parts[1] === "search"){
+    return { type:"search", q: parts.slice(2).join(" ") };
+  }
+
+  return { type:"home" };
+}
+
+/* ================= WARNING ================= */
+if(!window.__warned){
+  window.__warned = true;
+  alert(
+    "DuroTube Warning: Some archived content may be sensitive or disturbing. Filtering is applied but not perfect."
+  );
+}
+
+/* ================= FILTER ================= */
 const hardBlockTerms = [
   "csam","child pornography","child sexual abuse material","cp",
   "lolicon","loli","shotacon","shota",
@@ -211,14 +239,36 @@ function filter(items){
   });
 }
 
-/* ================= FEED ================= */
-async function loadFeed(){
+/* ================= HOME ================= */
+async function loadHome(){
   show();
 
   let items = await fetchVideos(currentQuery);
   items = filter(items);
 
   render(items);
+
+  sidebar.style.display="none";
+  playerView.style.display="none";
+  document.getElementById("app").style.display="flex";
+
+  hide();
+}
+
+/* ================= SEARCH ================= */
+async function loadSearch(q){
+  show();
+
+  currentQuery = q || "collection:opensource_movies";
+
+  let items = await fetchVideos(currentQuery);
+  items = filter(items);
+
+  render(items);
+
+  sidebar.style.display="none";
+  playerView.style.display="none";
+  document.getElementById("app").style.display="flex";
 
   hide();
 }
@@ -238,7 +288,10 @@ function render(items){
       <div class="meta">${v.uploader||""}</div>
     `;
 
-    el.onclick=()=>openVideo(v.identifier);
+    el.onclick=()=>{
+      setRoute(`/video/${v.identifier}`);
+    };
+
     grid.appendChild(el);
   });
 }
@@ -247,75 +300,69 @@ function render(items){
 function renderRecs(items){
   recs.innerHTML="";
 
-  items
-    .slice(0,8)
-    .forEach(v=>{
+  items.slice(0,8).forEach(v=>{
+    const el=document.createElement("div");
+    el.className="recCard";
 
-      const el=document.createElement("div");
-      el.className="recCard";
+    el.innerHTML=`
+      <img class="recThumb"
+        src="https://archive.org/services/img/${v.identifier}">
+      <div class="recTitle">${v.title||""}</div>
+    `;
 
-      el.innerHTML=`
-        <img class="recThumb"
-          src="https://archive.org/services/img/${v.identifier}">
-        <div class="recTitle">${v.title||""}</div>
-        <div class="recUploader">${v.uploader||""}</div>
-      `;
+    el.onclick=()=>{
+      setRoute(`/video/${v.identifier}`);
+    };
 
-      el.onclick=()=>openVideo(v.identifier);
-      recs.appendChild(el);
-    });
+    recs.appendChild(el);
+  });
 }
 
 /* ================= VIDEO ================= */
-async function openVideo(id){
+async function loadVideo(id){
 
   show();
-  currentVideo=id;
 
   document.getElementById("app").style.display="none";
   playerView.style.display="block";
   sidebar.style.display="block";
 
-  let meta = {};
-  let m = {};
-  let files = [];
+  let meta={}, m={}, files=[];
 
-  try {
+  try{
     meta = await fetchMeta(id);
     m = meta?.metadata || {};
     files = Array.isArray(meta?.files) ? meta.files : [];
-  } catch {}
+  }catch{}
 
-  /* SAFE FILE PICK */
   const file = files.find(f =>
-    (f?.name || "").toLowerCase().endsWith(".mp4")
+    (f?.name||"").toLowerCase().endsWith(".mp4")
   );
 
   if(file){
-    const url=`https://archive.org/download/${id}/${file.name}`;
     player.source={
       type:"video",
-      sources:[{src:url,type:"video/mp4"}]
+      sources:[{
+        src:`https://archive.org/download/${id}/${file.name}`,
+        type:"video/mp4"
+      }]
     };
   }
 
-  /* ALWAYS RENDER INFO (NEVER OVERWRITTEN BY ERRORS) */
   videoInfo.innerHTML=`
-    <div class="infoRow">👤 Uploader: ${m.uploader||"Unknown"}</div>
-    <div class="infoRow">🎬 Creator: ${m.creator||"Unknown"}</div>
-    <div class="infoRow">📅 Published: ${m.publicdate||"Unknown"}</div>
-    <div class="infoRow">👁 Views: ${m.downloads||"N/A"}</div>
+    <div class="infoRow">👤 ${m.uploader||"Unknown"}</div>
+    <div class="infoRow">🎬 ${m.creator||"Unknown"}</div>
+    <div class="infoRow">📅 ${m.publicdate||"Unknown"}</div>
+    <div class="infoRow">👁 ${m.downloads||"N/A"}</div>
     <div class="desc">${m.description||"No description"}</div>
   `;
 
-  /* SAFE RECOMMENDATIONS (NO UI BREAKING) */
-  let recData = [];
-
-  try {
+  let recData=[];
+  try{
     recData = await fetchVideos(m.subject || m.creator || "movies");
     recData = filter(recData);
-  } catch {
-    recData = [];
+  }catch{
+    recData=[];
   }
 
   renderRecs(recData);
@@ -323,23 +370,38 @@ async function openVideo(id){
   hide();
 }
 
-/* ================= BACK ================= */
-document.getElementById("back").onclick=()=>{
-  document.getElementById("app").style.display="flex";
-  playerView.style.display="none";
-  sidebar.style.display="none";
-  player.pause();
-  loadFeed();
-};
+/* ================= ROUTER ================= */
+function router(){
+  const r = parseRoute();
 
-/* ================= SEARCH ================= */
+  if(r.type === "video"){
+    loadVideo(r.id);
+  }
+
+  else if(r.type === "search"){
+    loadSearch(r.q);
+  }
+
+  else{
+    loadHome();
+  }
+}
+
+window.addEventListener("hashchange", router);
+
+/* ================= SEARCH INPUT ================= */
 search.addEventListener("input",e=>{
-  currentQuery = e.target.value || "collection:opensource_movies";
-  loadFeed();
+  const q = e.target.value.trim();
+  setRoute(q ? `/search/${encodeURIComponent(q)}` : "/");
 });
 
-/* ================= START ================= */
-loadFeed();
+/* ================= BACK BUTTON ================= */
+document.getElementById("back").onclick=()=>{
+  setRoute("/");
+};
+
+/* ================= INIT ================= */
+router();
 
 </script>
 
