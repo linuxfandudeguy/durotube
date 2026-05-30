@@ -274,32 +274,33 @@ saveSettings.onclick = () => {
 
   settingsModal.style.display = "none";
 
-  // 🔄 force refresh if proxy changed
+  // refresh if changed
   if (oldProxy !== useCorsProxy || oldUrl !== corsProxyUrl) {
     route();
   }
 };
 
-/* ================= FETCH WRAPPER ================= */
+/* ================= UNIVERSAL FETCH ================= */
 
-async function requestJSON(url) {
+aasync function requestJSON(url) {
   try {
-    if (!useCorsProxy) {
-      const r = await fetch(url);
-      return await r.json();
-    }
+    const target = useCorsProxy
+      ? corsProxyUrl + encodeURIComponent(url)
+      : url;
 
-    const r = await fetch(corsProxyUrl + encodeURIComponent(url));
-    const text = await r.text();
+    const res = await fetch(target);
 
-    try {
-      return JSON.parse(text);
-    } catch {
+    if (!res.ok) {
+      console.error("HTTP error:", res.status);
       return {};
     }
 
+    const text = await res.text();
+
+    return JSON.parse(text);
+
   } catch (err) {
-    console.error(err);
+    console.error("requestJSON error:", err);
     return {};
   }
 }
@@ -464,7 +465,7 @@ function filter(items) {
   });
 }
 
-/* ================= ROUTING ================= */
+/* ================= ROUTER ================= */
 
 function route() {
   const h = decodeURIComponent(location.hash.replace("#",""));
@@ -547,7 +548,7 @@ function render(items) {
   });
 }
 
-/* ================= RECS ================= */
+/* ================= RECOMMENDATIONS ================= */
 
 function renderRecs(items) {
   recs.innerHTML = "";
@@ -575,13 +576,13 @@ function renderRecs(items) {
 async function loadVideo(id) {
   show();
 
-  videoSession++; // 🔥 force new session every video
+  videoSession++; // fresh session per video
 
   document.getElementById("app").style.display = "none";
   watch.style.display = "block";
   sidebar.style.display = "block";
 
-  recs.innerHTML = ""; // 🔥 clear old recs immediately
+  recs.innerHTML = "";
 
   const meta = await fetchMeta(id);
   const m = meta.metadata || {};
