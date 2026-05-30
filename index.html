@@ -1,74 +1,315 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DuroTube</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DuroTube</title>
 
-  <link rel="stylesheet" href="style.css"/>
-  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
+<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#0f0f0f;
+  color:white;
+}
+
+header{
+  display:flex;
+  gap:10px;
+  padding:12px;
+  background:#181818;
+  border-bottom:1px solid #222;
+}
+
+.logo{font-weight:bold}
+
+#search{
+  flex:1;
+  padding:10px;
+  border:none;
+  border-radius:10px;
+  background:#121212;
+  color:white;
+}
+
+#app{display:flex}
+
+#grid{
+  flex:1;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:12px;
+  padding:12px;
+}
+
+.card{cursor:pointer}
+.thumb{
+  width:100%;
+  aspect-ratio:16/9;
+  object-fit:cover;
+  border-radius:10px;
+}
+
+.title{font-size:13px;margin-top:5px}
+.meta{font-size:12px;color:#aaa}
+
+#sidebar{
+  width:320px;
+  background:#111;
+  border-left:1px solid #222;
+  padding:12px;
+  display:none;
+}
+
+.recCard{margin-bottom:12px;cursor:pointer}
+.recThumb{width:100%;border-radius:8px}
+.recTitle{font-size:12px;margin-top:4px}
+.recUploader{font-size:11px;color:#888}
+
+#playerView{display:none;padding:12px}
+
+video{width:100%;border-radius:10px}
+
+#videoInfo{
+  margin-top:10px;
+  padding:12px;
+  background:#111;
+  border-radius:10px;
+  font-size:13px;
+}
+
+.infoRow{color:#aaa;margin-bottom:5px}
+.desc{margin-top:10px;color:#ddd}
+
+#back{margin-top:10px;color:#3ea6ff;cursor:pointer}
+
+#loader{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,0.85);
+}
+
+.spinner{
+  width:48px;
+  height:48px;
+  border:4px solid #333;
+  border-top:4px solid #3ea6ff;
+  border-radius:50%;
+  animation:spin 1s linear infinite;
+}
+
+@keyframes spin{100%{transform:rotate(360deg)}}
+</style>
 </head>
 
 <body>
 
 <header>
   <div class="logo">DuroTube</div>
-  <input id="search" placeholder="Search videos..." />
-  <div class="settingsBtn" onclick="openSettings()">⚙</div>
+  <input id="search" placeholder="Search videos...">
 </header>
 
-<div id="grid" class="grid"></div>
-
-<div id="playerView">
-  <div class="back" onclick="back()">← Back</div>
-
-  <video id="player" controls></video>
-
-  <div id="videoMeta" class="videoMeta"></div>
-  <div id="videoDescription" class="description"></div>
-
-  <div id="fallbackLink"></div>
-
-  <div class="sectionTitle">Recommended</div>
-  <div id="recommended" class="recGrid"></div>
+<div id="loader">
+  <div class="spinner"></div>
 </div>
 
-<!-- SETTINGS -->
-<div id="modal" class="modal">
-  <div class="modalContent">
-    <h3>Settings</h3>
-
-    <label>Language</label>
-    <select id="lang">
-      <option value="">Auto</option>
-      <option value="en">English</option>
-      <option value="es">Spanish</option>
-      <option value="fr">French</option>
-      <option value="de">German</option>
-      <option value="ja">Japanese</option>
-      <option value="zh">Chinese</option>
-    </select>
-
-    <label style="margin-top:10px;">Sensitive Blur</label>
-    <select id="blurToggle">
-      <option value="on">Blur Enabled</option>
-      <option value="off">Blur Disabled</option>
-    </select>
-
-    <label style="margin-top:10px;">CORS Proxy</label>
-    <select id="proxyMode">
-      <option value="on">Enabled</option>
-      <option value="off">Disabled</option>
-    </select>
-
-    <input id="proxyURL" placeholder="https://uncors.vercel.app/" />
-
-    <button onclick="closeSettings()">Close</button>
+<div id="app">
+  <div id="grid"></div>
+  <div id="sidebar">
+    <div style="color:#aaa;margin-bottom:10px;">Recommended</div>
+    <div id="recs"></div>
   </div>
 </div>
 
+<div id="playerView">
+  <video id="player" controls></video>
+  <div id="videoInfo"></div>
+  <div id="back">← Back</div>
+</div>
+
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
-<script src="app.js"></script>
+
+<script>
+
+const grid = document.getElementById("grid");
+const sidebar = document.getElementById("sidebar");
+const recs = document.getElementById("recs");
+const loader = document.getElementById("loader");
+const playerView = document.getElementById("playerView");
+const player = new Plyr("#player");
+const videoInfo = document.getElementById("videoInfo");
+const search = document.getElementById("search");
+
+let currentQuery = "collection:opensource_movies";
+let currentVideo = null;
+
+const show = ()=>loader.style.display="flex";
+const hide = ()=>loader.style.display="none";
+
+/* ================= WARNING ================= */
+alert(
+  "DuroTube Warning: This platform indexes publicly available Archive.org content. Some videos may contain sensitive, disturbing, or mature material. Although filtering is applied, not all content can be fully controlled or guaranteed safe."
+);
+
+/* ================= HARD BLOCK ================= */
+const hardBlockTerms = [
+  "csam","child pornography","child sexual abuse material","cp",
+  "lolicon","loli","shotacon","shota",
+  "rape","forced sex","non-consensual sex",
+  "hurtcore","guro",
+  "snuff","snuff film",
+  "crush fetish","animal crush"
+];
+
+function isBlocked(text=""){
+  text=text.toLowerCase();
+  return hardBlockTerms.some(t=>text.includes(t));
+}
+
+/* ================= API ================= */
+async function fetchVideos(q){
+  const url=
+    `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}`
+    +`&fl[]=identifier,title,uploader,description,creator,subject`
+    +`&output=json&rows=30`;
+
+  const r=await fetch(url);
+  const d=await r.json();
+  return d.response.docs||[];
+}
+
+async function fetchMeta(id){
+  return fetch(`https://archive.org/metadata/${id}`).then(r=>r.json());
+}
+
+/* ================= FILTER ================= */
+function filter(items){
+  return items.filter(v=>{
+    const text=`
+      ${v.title||""}
+      ${v.description||""}
+      ${v.creator||""}
+      ${v.uploader||""}
+      ${v.subject||""}
+    `;
+    return !isBlocked(text);
+  });
+}
+
+/* ================= FEED ================= */
+async function loadFeed(){
+  show();
+  let items=await fetchVideos(currentQuery);
+  items=filter(items);
+  render(items);
+  hide();
+}
+
+/* ================= GRID ================= */
+function render(items){
+  grid.innerHTML="";
+  items.forEach(v=>{
+    const el=document.createElement("div");
+    el.className="card";
+
+    el.innerHTML=`
+      <img class="thumb"
+        src="https://archive.org/services/img/${v.identifier}">
+      <div class="title">${v.title||""}</div>
+      <div class="meta">${v.uploader||""}</div>
+    `;
+
+    el.onclick=()=>openVideo(v.identifier);
+    grid.appendChild(el);
+  });
+}
+
+/* ================= RECS ================= */
+function renderRecs(items){
+  recs.innerHTML="";
+  items.slice(0,8).forEach(v=>{
+    const el=document.createElement("div");
+    el.className="recCard";
+
+    el.innerHTML=`
+      <img class="recThumb"
+        src="https://archive.org/services/img/${v.identifier}">
+      <div class="recTitle">${v.title||""}</div>
+      <div class="recUploader">${v.uploader||""}</div>
+    `;
+
+    el.onclick=()=>openVideo(v.identifier);
+    recs.appendChild(el);
+  });
+}
+
+/* ================= VIDEO ================= */
+async function openVideo(id){
+  show();
+  currentVideo=id;
+
+  document.getElementById("app").style.display="none";
+  playerView.style.display="block";
+  sidebar.style.display="block";
+
+  try{
+    const meta=await fetchMeta(id);
+    const m=meta.metadata||{};
+    const files=Array.isArray(meta.files)?meta.files:[];
+
+    const file=files.find(f=>
+      f?.name?.toLowerCase?.().endsWith(".mp4")
+    );
+
+    if(file){
+      const url=`https://archive.org/download/${id}/${file.name}`;
+      player.source={type:"video",sources:[{src:url,type:"video/mp4"}]};
+    }
+
+    videoInfo.innerHTML=`
+      <div class="infoRow">👤 Uploader: ${m.uploader||"Unknown"}</div>
+      <div class="infoRow">🎬 Creator: ${m.creator||"Unknown"}</div>
+      <div class="infoRow">📅 Published: ${m.publicdate||"Unknown"}</div>
+      <div class="infoRow">👁 Views: ${m.downloads||"N/A"}</div>
+      <div class="desc">${m.description||"No description"}</div>
+    `;
+
+    let recData=await fetchVideos(m.subject||m.creator||"movies");
+    recData=filter(recData);
+    renderRecs(recData);
+
+  }catch(err){
+    console.error(err);
+    videoInfo.innerHTML=`<div style="color:#ff6b6b;">Error loading video</div>`;
+  }
+
+  hide();
+}
+
+/* ================= BACK ================= */
+document.getElementById("back").onclick=()=>{
+  document.getElementById("app").style.display="flex";
+  playerView.style.display="none";
+  sidebar.style.display="none";
+  player.pause();
+  loadFeed();
+};
+
+/* ================= SEARCH ================= */
+search.addEventListener("input",e=>{
+  currentQuery=e.target.value||"collection:opensource_movies";
+  loadFeed();
+});
+
+/* ================= START ================= */
+loadFeed();
+
+</script>
 
 </body>
 </html>
