@@ -282,7 +282,7 @@ saveSettings.onclick = () => {
 
 /* ================= UNIVERSAL FETCH ================= */
 
-aasync function requestJSON(url) {
+async function requestJSON(url) {
   try {
     const target = useCorsProxy
       ? corsProxyUrl + encodeURIComponent(url)
