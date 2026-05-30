@@ -120,6 +120,7 @@ video{width:100%;border-radius:10px}
 
 <div id="app">
   <div id="grid"></div>
+
   <div id="sidebar">
     <div style="color:#aaa;margin-bottom:10px;">Recommended</div>
     <div id="recs"></div>
@@ -136,6 +137,7 @@ video{width:100%;border-radius:10px}
 
 <script>
 
+/* ================= ELEMENTS ================= */
 const grid = document.getElementById("grid");
 const sidebar = document.getElementById("sidebar");
 const recs = document.getElementById("recs");
@@ -145,18 +147,15 @@ const player = new Plyr("#player");
 const videoInfo = document.getElementById("videoInfo");
 const search = document.getElementById("search");
 
+/* ================= STATE ================= */
 let currentQuery = "collection:opensource_movies";
 let currentVideo = null;
 
+/* ================= LOADER ================= */
 const show = ()=>loader.style.display="flex";
 const hide = ()=>loader.style.display="none";
 
-/* ================= WARNING ================= */
-alert(
-  "DuroTube Warning: This platform indexes publicly available Archive.org content. Some videos may contain sensitive, disturbing, or mature material. Although filtering is applied, not all content can be fully controlled or guaranteed safe."
-);
-
-/* ================= HARD BLOCK ================= */
+/* ================= SAFETY FILTER ================= */
 const hardBlockTerms = [
   "csam","child pornography","child sexual abuse material","cp",
   "lolicon","loli","shotacon","shota",
@@ -167,30 +166,41 @@ const hardBlockTerms = [
 ];
 
 function isBlocked(text=""){
-  text=text.toLowerCase();
-  return hardBlockTerms.some(t=>text.includes(t));
+  return hardBlockTerms.some(t =>
+    text.toLowerCase().includes(t)
+  );
 }
 
 /* ================= API ================= */
 async function fetchVideos(q){
-  const url=
-    `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}`
-    +`&fl[]=identifier,title,uploader,description,creator,subject`
-    +`&output=json&rows=30`;
+  try {
+    const url =
+      `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}`
+      +`&fl[]=identifier,title,uploader,description,creator,subject`
+      +`&output=json&rows=30`;
 
-  const r=await fetch(url);
-  const d=await r.json();
-  return d.response.docs||[];
+    const r = await fetch(url);
+    const d = await r.json();
+
+    return d?.response?.docs || [];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchMeta(id){
-  return fetch(`https://archive.org/metadata/${id}`).then(r=>r.json());
+  try {
+    const r = await fetch(`https://archive.org/metadata/${id}`);
+    return await r.json();
+  } catch {
+    return {};
+  }
 }
 
 /* ================= FILTER ================= */
 function filter(items){
   return items.filter(v=>{
-    const text=`
+    const text = `
       ${v.title||""}
       ${v.description||""}
       ${v.creator||""}
@@ -204,15 +214,19 @@ function filter(items){
 /* ================= FEED ================= */
 async function loadFeed(){
   show();
-  let items=await fetchVideos(currentQuery);
-  items=filter(items);
+
+  let items = await fetchVideos(currentQuery);
+  items = filter(items);
+
   render(items);
+
   hide();
 }
 
 /* ================= GRID ================= */
 function render(items){
   grid.innerHTML="";
+
   items.forEach(v=>{
     const el=document.createElement("div");
     el.className="card";
@@ -232,24 +246,29 @@ function render(items){
 /* ================= RECS ================= */
 function renderRecs(items){
   recs.innerHTML="";
-  items.slice(0,8).forEach(v=>{
-    const el=document.createElement("div");
-    el.className="recCard";
 
-    el.innerHTML=`
-      <img class="recThumb"
-        src="https://archive.org/services/img/${v.identifier}">
-      <div class="recTitle">${v.title||""}</div>
-      <div class="recUploader">${v.uploader||""}</div>
-    `;
+  items
+    .slice(0,8)
+    .forEach(v=>{
 
-    el.onclick=()=>openVideo(v.identifier);
-    recs.appendChild(el);
-  });
+      const el=document.createElement("div");
+      el.className="recCard";
+
+      el.innerHTML=`
+        <img class="recThumb"
+          src="https://archive.org/services/img/${v.identifier}">
+        <div class="recTitle">${v.title||""}</div>
+        <div class="recUploader">${v.uploader||""}</div>
+      `;
+
+      el.onclick=()=>openVideo(v.identifier);
+      recs.appendChild(el);
+    });
 }
 
 /* ================= VIDEO ================= */
 async function openVideo(id){
+
   show();
   currentVideo=id;
 
@@ -257,36 +276,49 @@ async function openVideo(id){
   playerView.style.display="block";
   sidebar.style.display="block";
 
-  try{
-    const meta=await fetchMeta(id);
-    const m=meta.metadata||{};
-    const files=Array.isArray(meta.files)?meta.files:[];
+  let meta = {};
+  let m = {};
+  let files = [];
 
-    const file=files.find(f=>
-      f?.name?.toLowerCase?.().endsWith(".mp4")
-    );
+  try {
+    meta = await fetchMeta(id);
+    m = meta?.metadata || {};
+    files = Array.isArray(meta?.files) ? meta.files : [];
+  } catch {}
 
-    if(file){
-      const url=`https://archive.org/download/${id}/${file.name}`;
-      player.source={type:"video",sources:[{src:url,type:"video/mp4"}]};
-    }
+  /* SAFE FILE PICK */
+  const file = files.find(f =>
+    (f?.name || "").toLowerCase().endsWith(".mp4")
+  );
 
-    videoInfo.innerHTML=`
-      <div class="infoRow">👤 Uploader: ${m.uploader||"Unknown"}</div>
-      <div class="infoRow">🎬 Creator: ${m.creator||"Unknown"}</div>
-      <div class="infoRow">📅 Published: ${m.publicdate||"Unknown"}</div>
-      <div class="infoRow">👁 Views: ${m.downloads||"N/A"}</div>
-      <div class="desc">${m.description||"No description"}</div>
-    `;
-
-    let recData=await fetchVideos(m.subject||m.creator||"movies");
-    recData=filter(recData);
-    renderRecs(recData);
-
-  }catch(err){
-    console.error(err);
-    videoInfo.innerHTML=`<div style="color:#ff6b6b;">Error loading video</div>`;
+  if(file){
+    const url=`https://archive.org/download/${id}/${file.name}`;
+    player.source={
+      type:"video",
+      sources:[{src:url,type:"video/mp4"}]
+    };
   }
+
+  /* ALWAYS RENDER INFO (NEVER OVERWRITTEN BY ERRORS) */
+  videoInfo.innerHTML=`
+    <div class="infoRow">👤 Uploader: ${m.uploader||"Unknown"}</div>
+    <div class="infoRow">🎬 Creator: ${m.creator||"Unknown"}</div>
+    <div class="infoRow">📅 Published: ${m.publicdate||"Unknown"}</div>
+    <div class="infoRow">👁 Views: ${m.downloads||"N/A"}</div>
+    <div class="desc">${m.description||"No description"}</div>
+  `;
+
+  /* SAFE RECOMMENDATIONS (NO UI BREAKING) */
+  let recData = [];
+
+  try {
+    recData = await fetchVideos(m.subject || m.creator || "movies");
+    recData = filter(recData);
+  } catch {
+    recData = [];
+  }
+
+  renderRecs(recData);
 
   hide();
 }
@@ -302,7 +334,7 @@ document.getElementById("back").onclick=()=>{
 
 /* ================= SEARCH ================= */
 search.addEventListener("input",e=>{
-  currentQuery=e.target.value||"collection:opensource_movies";
+  currentQuery = e.target.value || "collection:opensource_movies";
   loadFeed();
 });
 
