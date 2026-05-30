@@ -29,7 +29,7 @@
 
   <div id="fallbackLink"></div>
 
-  <div class="sectionTitle">Recommended (by subject)</div>
+  <div class="sectionTitle">Recommended</div>
   <div id="recommended" class="recGrid"></div>
 </div>
 
@@ -49,6 +49,12 @@
       <option value="zh">Chinese</option>
     </select>
 
+    <label style="margin-top:10px;">Sensitive Blur</label>
+    <select id="blurToggle">
+      <option value="on">Blur Enabled</option>
+      <option value="off">Blur Disabled</option>
+    </select>
+
     <label style="margin-top:10px;">CORS Proxy</label>
     <select id="proxyMode">
       <option value="on">Enabled</option>
@@ -62,7 +68,6 @@
 </div>
 
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
-<script src="config.js"></script>
 <script src="app.js"></script>
 
 </body>
