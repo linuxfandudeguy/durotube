@@ -127,6 +127,67 @@ header{
 <body>
 
 <header>
+  <button id="settingsBtn">⚙ Settings</button>
+
+<div id="settingsModal" style="
+display:none;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.85);
+z-index:9999;
+align-items:center;
+justify-content:center;
+">
+  <div style="
+  width:min(500px,90vw);
+  background:#181818;
+  border:1px solid #333;
+  border-radius:12px;
+  padding:20px;
+  ">
+    <h2>Settings</h2>
+
+    <label style="display:block;margin-bottom:12px;">
+      <input type="checkbox" id="useCors">
+      Use CORS Proxy
+    </label>
+
+    <label style="display:block;margin-bottom:8px;">
+      Proxy URL
+    </label>
+
+    <input
+      id="corsUrl"
+      style="
+      width:100%;
+      padding:10px;
+      border:none;
+      border-radius:8px;
+      background:#111;
+      color:white;
+      "
+    >
+<style>
+
+  #settingsBtn{
+  position:fixed;
+  bottom:15px;
+  right:15px;
+  z-index:500;
+  background:#222;
+  color:white;
+  border:none;
+  padding:10px 14px;
+  border-radius:10px;
+  cursor:pointer;
+}
+</style>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button id="saveSettings" class="settingsBtn">Save</button>
+      <button id="closeSettings" class="settingsBtn">Close</button>
+    </div>
+  </div>
+</div>
   <div class="logo">DuroTube</div>
   <input id="search" placeholder="Search videos...">
 </header>
@@ -169,202 +230,411 @@ const titleEl=document.getElementById("title");
 const videoInfo=document.getElementById("videoInfo");
 const search=document.getElementById("search");
 
+/* ================= STATE ================= */
 let currentQuery="collection:opensource_movies";
 
-/* ================= WARNING ================= */
+/* ================= SETTINGS ================= */
 
-/* ================= BLOCK ================= */
-const block=[
- "csam","child pornography","child sexual abuse material","cp",
- "lolicon","loli","shotacon","shota",
- "rape","forced sex","non-consensual sex",
- "hurtcore","guro","snuff",
- "crush fetish","animal crush"
+const DEFAULT_PROXY="https://api.allorigins.win/get?url=";
+
+let useCorsProxy = localStorage.getItem("useCorsProxy");
+useCorsProxy = useCorsProxy === null ? true : useCorsProxy === "true";
+
+let corsProxyUrl =
+  localStorage.getItem("corsProxyUrl") ||
+  DEFAULT_PROXY;
+
+/* ================= SETTINGS UI ================= */
+
+const settingsBtn=document.getElementById("settingsBtn");
+const settingsModal=document.getElementById("settingsModal");
+const useCors=document.getElementById("useCors");
+const corsUrl=document.getElementById("corsUrl");
+const saveSettings=document.getElementById("saveSettings");
+const closeSettings=document.getElementById("closeSettings");
+
+settingsBtn.onclick=()=>{
+  useCors.checked=useCorsProxy;
+  corsUrl.value=corsProxyUrl;
+  settingsModal.style.display="flex";
+};
+
+closeSettings.onclick=()=>{
+  settingsModal.style.display="none";
+};
+
+saveSettings.onclick=()=>{
+  useCorsProxy=useCors.checked;
+  corsProxyUrl=corsUrl.value.trim()||DEFAULT_PROXY;
+
+  localStorage.setItem("useCorsProxy",useCorsProxy);
+  localStorage.setItem("corsProxyUrl",corsProxyUrl);
+
+  settingsModal.style.display="none";
+};
+
+/* ================= CORS WRAPPER ================= */
+
+async function requestJSON(url){
+
+  try{
+
+    // direct request (no proxy)
+    if(!useCorsProxy){
+      const r=await fetch(url);
+      return await r.json();
+    }
+
+    // proxy request
+    const r=await fetch(corsProxyUrl + encodeURIComponent(url));
+    const data=await r.json();
+
+    if(!data.contents){
+      return {};
+    }
+
+    // allorigins returns raw text in "contents"
+    try{
+      return JSON.parse(data.contents);
+    }catch{
+      return data.contents;
+    }
+
+  }catch(err){
+    console.error("requestJSON error:",err);
+    return {};
+  }
+}
+
+/* ================= WARNING BLOCK ================= */
+
+const block = [
+/* ================= CORE ENGLISH TERMS ================= */
+"csam",
+"child pornography",
+"child sexual abuse material",
+"child abuse material",
+"child sexual abuse",
+"minor sexual abuse",
+"cp",
+
+"lolicon",
+"loli",
+"shotacon",
+"shota",
+
+"rape",
+"sexual assault",
+"forced sex",
+"non-consensual sex",
+"unwanted sex",
+"coerced sex",
+
+"hurtcore",
+"guro",
+"snuff",
+
+"crush fetish",
+"animal crush",
+"animal abuse",
+
+/* ================= EUPHEMISMS / COMMON VARIANTS ================= */
+"pedo",
+"pedophile",
+"underage sex",
+"underage porn",
+"child porn",
+"kid porn",
+"teen porn",
+"minor porn",
+
+/* ================= SPANISH ================= */
+"pornografía infantil",
+"abuso sexual infantil",
+"material de abuso infantil",
+"violación",
+"agresión sexual",
+"sexo forzado",
+"menores sexual",
+
+/* ================= FRENCH ================= */
+"pornographie enfantine",
+"abus sexuel sur mineur",
+"viol",
+"agression sexuelle",
+"mineur sexuel",
+
+/* ================= GERMAN ================= */
+"kinderpornografie",
+"sexueller missbrauch von kindern",
+"vergewaltigung",
+"sexueller übergriff",
+"zwang sex",
+
+/* ================= ITALIAN ================= */
+"pedopornografia",
+"abuso sessuale su minori",
+"violenza sessuale",
+"stupro",
+"minore sesso",
+
+/* ================= PORTUGUESE ================= */
+"pornografia infantil",
+"abuso sexual infantil",
+"estupro",
+"violação sexual",
+"sexo com menor",
+
+/* ================= RUSSIAN (translit + cyrillic) ================= */
+"детская порнография",
+"сексуальное насилие над детьми",
+"изнасилование",
+"насильственный секс",
+"child porn",
+"pedofiliya",
+"pedofilia",
+
+/* ================= ARABIC ================= */
+"استغلال الأطفال",
+"اعتداء جنسي على الأطفال",
+"اغتصاب",
+"اعتداء جنسي",
+"إباحية الأطفال",
+
+/* ================= CHINESE (Simplified/Traditional) ================= */
+"儿童色情",
+"兒童色情",
+"儿童性虐待",
+"性侵儿童",
+"强奸",
+"性侵犯",
+
+/* ================= JAPANESE ================= */
+"児童ポルノ",
+"児童性的虐待",
+"レイプ",
+"強姦",
+"性的暴行",
+
+/* ================= KOREAN ================= */
+"아동 포르노",
+"아동 성적 학대",
+"강간",
+"성폭행",
+"성적 학대",
+
+/* ================= TRANSLITERATION / SEARCH VARIANTS ================= */
+"csam material",
+"child sexual exploitation",
+"cse material",
+"underage exploitation",
+"minor exploitation",
+"porn minors"
 ];
 
-const isBlocked=t=>block.some(x=>t.toLowerCase().includes(x));
+const isBlocked=t=>
+  block.some(x=>t.toLowerCase().includes(x));
 
 /* ================= UI ================= */
+
 const show=()=>loader.style.display="flex";
 const hide=()=>loader.style.display="none";
 
 /* ================= API ================= */
+
 async function fetchVideos(q){
- try{
-  const r=await fetch(
-   `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}`
-   +`&fl[]=identifier,title,uploader,description,creator,subject`
-   +`&output=json&rows=30`
-  );
-  const d=await r.json();
-  return d?.response?.docs||[];
- }catch{return[]}
+  const url=
+    `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}`
+    +`&fl[]=identifier,title,uploader,description,creator,subject`
+    +`&output=json&rows=30`;
+
+  const data=await requestJSON(url);
+  return data?.response?.docs||[];
 }
 
 async function fetchMeta(id){
- try{
-  const r=await fetch(`https://archive.org/metadata/${id}`);
-  return await r.json();
- }catch{return{}}
+  const url=`https://archive.org/metadata/${id}`;
+  return await requestJSON(url);
 }
 
 /* ================= FILTER ================= */
+
 function filter(items){
- return items.filter(v=>{
-  const t=`${v.title||""}${v.description||""}${v.creator||""}${v.uploader||""}`;
-  return !isBlocked(t);
- });
+  return items.filter(v=>{
+    const t=`${v.title||""}${v.description||""}${v.creator||""}${v.uploader||""}`;
+    return !isBlocked(t);
+  });
 }
 
 /* ================= ROUTING ================= */
+
 function route(){
- const h=decodeURIComponent(location.hash.replace("#",""));
- const p=h.split("/");
+  const h=decodeURIComponent(location.hash.replace("#",""));
+  const p=h.split("/");
 
- if(!h||h==="/"){
-  exitVideo();
-  loadHome();
-  return;
- }
+  if(!h||h==="/"){
+    exitVideo();
+    loadHome();
+    return;
+  }
 
- if(p[1] !== "video") exitVideo();
+  if(p[1]!=="video") exitVideo();
 
- if(p[1]==="video") loadVideo(p.slice(2).join("/"));
- if(p[1]==="search") loadSearch(p.slice(2).join(" "));
+  if(p[1]==="video")
+    loadVideo(p.slice(2).join("/"));
+
+  if(p[1]==="search")
+    loadSearch(p.slice(2).join(" "));
 }
 
 window.addEventListener("hashchange",route);
 
-/* ================= EXIT VIDEO (IMPORTANT) ================= */
+/* ================= EXIT ================= */
+
 function exitVideo(){
- try{
-  player.pause();
- }catch{}
+  try{ player.pause(); }catch{}
 
- player.source=null;
+  player.source=null;
 
- watch.style.display="none";
- sidebar.style.display="none";
- document.getElementById("app").style.display="flex";
+  watch.style.display="none";
+  sidebar.style.display="none";
+  document.getElementById("app").style.display="flex";
 
- titleEl.textContent="";
- videoInfo.innerHTML="";
- recs.innerHTML="";
+  titleEl.textContent="";
+  videoInfo.innerHTML="";
+  recs.innerHTML="";
 }
 
 /* ================= HOME ================= */
+
 async function loadHome(){
- show();
+  show();
 
- let items=await fetchVideos(currentQuery);
- items=filter(items);
+  let items=await fetchVideos(currentQuery);
+  items=filter(items);
 
- render(items);
+  render(items);
 
- hide();
+  hide();
 }
 
 /* ================= SEARCH ================= */
+
 async function loadSearch(q){
- currentQuery=q||"collection:opensource_movies";
- loadHome();
+  currentQuery=q||"collection:opensource_movies";
+  loadHome();
 }
 
 /* ================= GRID ================= */
+
 function render(items){
- grid.innerHTML="";
+  grid.innerHTML="";
 
- items.forEach(v=>{
-  const el=document.createElement("div");
-  el.className="card";
+  items.forEach(v=>{
+    const el=document.createElement("div");
+    el.className="card";
 
-  el.innerHTML=`
-    <img class="thumb"
-      src="https://archive.org/services/img/${v.identifier}">
-    <div class="title">${v.title||""}</div>
-    <div class="meta">${v.uploader||""}</div>
-  `;
+    el.innerHTML=`
+      <img class="thumb"
+        src="https://archive.org/services/img/${v.identifier}">
+      <div class="title">${v.title||""}</div>
+      <div class="meta">${v.uploader||""}</div>
+    `;
 
-  el.onclick=()=>location.hash=`#/video/${v.identifier}`;
-  grid.appendChild(el);
- });
+    el.onclick=()=>{
+      location.hash=`#/video/${v.identifier}`;
+    };
+
+    grid.appendChild(el);
+  });
 }
 
 /* ================= RECS ================= */
+
 function renderRecs(items){
- recs.innerHTML="";
- items.slice(0,8).forEach(v=>{
-  const el=document.createElement("div");
-  el.className="recCard";
+  recs.innerHTML="";
 
-  el.innerHTML=`
-    <img class="recThumb"
-      src="https://archive.org/services/img/${v.identifier}">
-    <div class="recTitle">${v.title||""}</div>
-  `;
+  items.slice(0,8).forEach(v=>{
+    const el=document.createElement("div");
+    el.className="recCard";
 
-  el.onclick=()=>location.hash=`#/video/${v.identifier}`;
-  recs.appendChild(el);
- });
+    el.innerHTML=`
+      <img class="recThumb"
+        src="https://archive.org/services/img/${v.identifier}">
+      <div class="recTitle">${v.title||""}</div>
+    `;
+
+    el.onclick=()=>{
+      location.hash=`#/video/${v.identifier}`;
+    };
+
+    recs.appendChild(el);
+  });
 }
 
 /* ================= VIDEO ================= */
+
 async function loadVideo(id){
- show();
+  show();
 
- document.getElementById("app").style.display="none";
- watch.style.display="block";
- sidebar.style.display="block";
+  document.getElementById("app").style.display="none";
+  watch.style.display="block";
+  sidebar.style.display="block";
 
- let meta=await fetchMeta(id);
- let m=meta.metadata||{};
- let files=Array.isArray(meta.files)?meta.files:[];
+  const meta=await fetchMeta(id);
+  const m=meta.metadata||{};
+  const files=Array.isArray(meta.files)?meta.files:[];
 
- let file=files.find(f=>(f?.name||"").endsWith(".mp4"));
+  const file=files.find(f=>
+    (f?.name||"").endsWith(".mp4")
+  );
 
- if(file){
-  player.source={
-   type:"video",
-   sources:[{
-    src:`https://archive.org/download/${id}/${file.name}`,
-    type:"video/mp4"
-   }]
-  };
- }
+  if(file){
+    player.source={
+      type:"video",
+      sources:[{
+        src:`https://archive.org/download/${id}/${file.name}`,
+        type:"video/mp4"
+      }]
+    };
+  }
 
- titleEl.textContent=m.title||"Untitled video";
+  titleEl.textContent=m.title||"Untitled video";
 
- videoInfo.innerHTML=`
-  <div class="infoRow">👤 ${m.uploader||"Unknown"}</div>
-  <div class="infoRow">🎬 ${m.creator||"Unknown"}</div>
-  <div class="infoRow">📅 ${m.publicdate||"Unknown"}</div>
-  <div class="desc">${m.description||"No description"}</div>
- `;
+  videoInfo.innerHTML=`
+    <div class="infoRow">👤 ${m.uploader||"Unknown"}</div>
+    <div class="infoRow">🎬 ${m.creator||"Unknown"}</div>
+    <div class="infoRow">📅 ${m.publicdate||"Unknown"}</div>
+    <div class="desc">${m.description||"No description"}</div>
+  `;
 
- let recData=[];
- try{
-  recData=await fetchVideos(m.subject||m.creator||"movies");
-  recData=filter(recData);
- }catch{}
+  let recData=[];
+  try{
+    recData=await fetchVideos(m.subject||m.creator||"movies");
+    recData=filter(recData);
+  }catch{}
 
- renderRecs(recData);
+  renderRecs(recData);
 
- hide();
+  hide();
 }
 
 /* ================= BACK ================= */
+
 document.getElementById("back").onclick=()=>{
- location.hash="#/";
+  location.hash="#/";
 };
 
 /* ================= SEARCH ================= */
+
 search.addEventListener("input",e=>{
- location.hash=e.target.value
-  ? `#/search/${encodeURIComponent(e.target.value)}`
-  : "#/";
+  location.hash=e.target.value
+    ? `#/search/${encodeURIComponent(e.target.value)}`
+    : "#/";
 });
 
 /* ================= INIT ================= */
+
 route();
 
 </script>
