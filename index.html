@@ -155,7 +155,7 @@ justify-content:center;
     <label style="display:block;margin-bottom:8px;">
       Proxy URL
     </label>
-
+   
     <input
       id="corsUrl"
       style="
@@ -167,6 +167,8 @@ justify-content:center;
       color:white;
       "
     >
+     <br>
+  <small>the proxy must return raw data, this means no allorigins.</small>
 <style>
 
   #settingsBtn{
@@ -593,13 +595,19 @@ async function loadVideo(id) {
   );
 
   if (file) {
-    player.source = {
-      type: "video",
-      sources: [{
-        src: `https://archive.org/download/${id}/${file.name}`,
-        type: "video/mp4"
-      }]
-    };
+    const videoUrl = `https://archive.org/download/${id}/${file.name}`;
+
+const finalUrl = useCorsProxy
+  ? corsProxyUrl + encodeURIComponent(videoUrl)
+  : videoUrl;
+
+player.source = {
+  type: "video",
+  sources: [{
+    src: finalUrl,
+    type: "video/mp4"
+  }]
+};
   }
 
   titleEl.textContent = m.title || "Untitled video";
