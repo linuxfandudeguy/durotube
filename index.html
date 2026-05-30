@@ -218,95 +218,93 @@ justify-content:center;
 </script>
 
 <script>
-
 /* ================= ELEMENTS ================= */
-const grid=document.getElementById("grid");
-const sidebar=document.getElementById("sidebar");
-const recs=document.getElementById("recs");
-const loader=document.getElementById("loader");
-const watch=document.getElementById("watchContainer");
-const player=new Plyr("#player");
-const titleEl=document.getElementById("title");
-const videoInfo=document.getElementById("videoInfo");
-const search=document.getElementById("search");
+const grid = document.getElementById("grid");
+const sidebar = document.getElementById("sidebar");
+const recs = document.getElementById("recs");
+const loader = document.getElementById("loader");
+const watch = document.getElementById("watchContainer");
+const player = new Plyr("#player");
+const titleEl = document.getElementById("title");
+const videoInfo = document.getElementById("videoInfo");
+const search = document.getElementById("search");
 
 /* ================= STATE ================= */
-let currentQuery="collection:opensource_movies";
+let currentQuery = "collection:opensource_movies";
+let videoSession = 0;
 
 /* ================= SETTINGS ================= */
 
-const DEFAULT_PROXY="https://api.allorigins.win/get?url=";
+const DEFAULT_PROXY = "https://uncors.vercel.app/?url=";
 
 let useCorsProxy = localStorage.getItem("useCorsProxy");
-useCorsProxy = useCorsProxy === null ? true : useCorsProxy === "true";
+useCorsProxy = useCorsProxy === null ? false : useCorsProxy === "true";
 
 let corsProxyUrl =
-  localStorage.getItem("corsProxyUrl") ||
-  DEFAULT_PROXY;
+  localStorage.getItem("corsProxyUrl") || DEFAULT_PROXY;
 
 /* ================= SETTINGS UI ================= */
 
-const settingsBtn=document.getElementById("settingsBtn");
-const settingsModal=document.getElementById("settingsModal");
-const useCors=document.getElementById("useCors");
-const corsUrl=document.getElementById("corsUrl");
-const saveSettings=document.getElementById("saveSettings");
-const closeSettings=document.getElementById("closeSettings");
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsModal = document.getElementById("settingsModal");
+const useCors = document.getElementById("useCors");
+const corsUrl = document.getElementById("corsUrl");
+const saveSettings = document.getElementById("saveSettings");
+const closeSettings = document.getElementById("closeSettings");
 
-settingsBtn.onclick=()=>{
-  useCors.checked=useCorsProxy;
-  corsUrl.value=corsProxyUrl;
-  settingsModal.style.display="flex";
+settingsBtn.onclick = () => {
+  useCors.checked = useCorsProxy;
+  corsUrl.value = corsProxyUrl;
+  settingsModal.style.display = "flex";
 };
 
-closeSettings.onclick=()=>{
-  settingsModal.style.display="none";
+closeSettings.onclick = () => {
+  settingsModal.style.display = "none";
 };
 
-saveSettings.onclick=()=>{
-  useCorsProxy=useCors.checked;
-  corsProxyUrl=corsUrl.value.trim()||DEFAULT_PROXY;
+saveSettings.onclick = () => {
+  const oldProxy = useCorsProxy;
+  const oldUrl = corsProxyUrl;
 
-  localStorage.setItem("useCorsProxy",useCorsProxy);
-  localStorage.setItem("corsProxyUrl",corsProxyUrl);
+  useCorsProxy = useCors.checked;
+  corsProxyUrl = corsUrl.value.trim() || DEFAULT_PROXY;
 
-  settingsModal.style.display="none";
+  localStorage.setItem("useCorsProxy", useCorsProxy);
+  localStorage.setItem("corsProxyUrl", corsProxyUrl);
+
+  settingsModal.style.display = "none";
+
+  // 🔄 force refresh if proxy changed
+  if (oldProxy !== useCorsProxy || oldUrl !== corsProxyUrl) {
+    route();
+  }
 };
 
-/* ================= CORS WRAPPER ================= */
+/* ================= FETCH WRAPPER ================= */
 
-async function requestJSON(url){
-
-  try{
-
-    // direct request (no proxy)
-    if(!useCorsProxy){
-      const r=await fetch(url);
+async function requestJSON(url) {
+  try {
+    if (!useCorsProxy) {
+      const r = await fetch(url);
       return await r.json();
     }
 
-    // proxy request
-    const r=await fetch(corsProxyUrl + encodeURIComponent(url));
-    const data=await r.json();
+    const r = await fetch(corsProxyUrl + encodeURIComponent(url));
+    const text = await r.text();
 
-    if(!data.contents){
+    try {
+      return JSON.parse(text);
+    } catch {
       return {};
     }
 
-    // allorigins returns raw text in "contents"
-    try{
-      return JSON.parse(data.contents);
-    }catch{
-      return data.contents;
-    }
-
-  }catch(err){
-    console.error("requestJSON error:",err);
+  } catch (err) {
+    console.error(err);
     return {};
   }
 }
 
-/* ================= WARNING BLOCK ================= */
+/* ================= BLACKLIST ================= */
 
 const block = [
 /* ================= CORE ENGLISH TERMS ================= */
@@ -432,86 +430,86 @@ const block = [
 "porn minors"
 ];
 
-const isBlocked=t=>
-  block.some(x=>t.toLowerCase().includes(x));
+const isBlocked = t =>
+  block.some(x => (t || "").toLowerCase().includes(x));
 
 /* ================= UI ================= */
 
-const show=()=>loader.style.display="flex";
-const hide=()=>loader.style.display="none";
+const show = () => loader.style.display = "flex";
+const hide = () => loader.style.display = "none";
 
 /* ================= API ================= */
 
-async function fetchVideos(q){
-  const url=
+async function fetchVideos(q) {
+  const url =
     `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}`
-    +`&fl[]=identifier,title,uploader,description,creator,subject`
-    +`&output=json&rows=30`;
+    + `&fl[]=identifier,title,uploader,description,creator,subject`
+    + `&output=json&rows=30`;
 
-  const data=await requestJSON(url);
-  return data?.response?.docs||[];
+  const data = await requestJSON(url);
+  return data?.response?.docs || [];
 }
 
-async function fetchMeta(id){
-  const url=`https://archive.org/metadata/${id}`;
+async function fetchMeta(id) {
+  const url = `https://archive.org/metadata/${id}`;
   return await requestJSON(url);
 }
 
 /* ================= FILTER ================= */
 
-function filter(items){
-  return items.filter(v=>{
-    const t=`${v.title||""}${v.description||""}${v.creator||""}${v.uploader||""}`;
+function filter(items) {
+  return items.filter(v => {
+    const t = `${v.title||""}${v.description||""}${v.creator||""}${v.uploader||""}`;
     return !isBlocked(t);
   });
 }
 
 /* ================= ROUTING ================= */
 
-function route(){
-  const h=decodeURIComponent(location.hash.replace("#",""));
-  const p=h.split("/");
+function route() {
+  const h = decodeURIComponent(location.hash.replace("#",""));
+  const p = h.split("/");
 
-  if(!h||h==="/"){
+  if (!h || h === "/") {
     exitVideo();
     loadHome();
     return;
   }
 
-  if(p[1]!=="video") exitVideo();
+  if (p[1] !== "video") exitVideo();
 
-  if(p[1]==="video")
+  if (p[1] === "video")
     loadVideo(p.slice(2).join("/"));
 
-  if(p[1]==="search")
+  if (p[1] === "search")
     loadSearch(p.slice(2).join(" "));
 }
 
-window.addEventListener("hashchange",route);
+window.addEventListener("hashchange", route);
 
 /* ================= EXIT ================= */
 
-function exitVideo(){
-  try{ player.pause(); }catch{}
+function exitVideo() {
+  try { player.pause(); } catch {}
 
-  player.source=null;
+  player.source = null;
 
-  watch.style.display="none";
-  sidebar.style.display="none";
-  document.getElementById("app").style.display="flex";
+  watch.style.display = "none";
+  sidebar.style.display = "none";
+  document.getElementById("app").style.display = "flex";
 
-  titleEl.textContent="";
-  videoInfo.innerHTML="";
-  recs.innerHTML="";
+  titleEl.textContent = "";
+  videoInfo.innerHTML = "";
+  recs.innerHTML = "";
 }
 
 /* ================= HOME ================= */
 
-async function loadHome(){
+async function loadHome() {
   show();
 
-  let items=await fetchVideos(currentQuery);
-  items=filter(items);
+  let items = await fetchVideos(currentQuery);
+  items = filter(items);
 
   render(items);
 
@@ -520,29 +518,29 @@ async function loadHome(){
 
 /* ================= SEARCH ================= */
 
-async function loadSearch(q){
-  currentQuery=q||"collection:opensource_movies";
+async function loadSearch(q) {
+  currentQuery = q || "collection:opensource_movies";
   loadHome();
 }
 
 /* ================= GRID ================= */
 
-function render(items){
-  grid.innerHTML="";
+function render(items) {
+  grid.innerHTML = "";
 
-  items.forEach(v=>{
-    const el=document.createElement("div");
-    el.className="card";
+  items.forEach(v => {
+    const el = document.createElement("div");
+    el.className = "card";
 
-    el.innerHTML=`
+    el.innerHTML = `
       <img class="thumb"
         src="https://archive.org/services/img/${v.identifier}">
       <div class="title">${v.title||""}</div>
       <div class="meta">${v.uploader||""}</div>
     `;
 
-    el.onclick=()=>{
-      location.hash=`#/video/${v.identifier}`;
+    el.onclick = () => {
+      location.hash = `#/video/${v.identifier}`;
     };
 
     grid.appendChild(el);
@@ -551,21 +549,21 @@ function render(items){
 
 /* ================= RECS ================= */
 
-function renderRecs(items){
-  recs.innerHTML="";
+function renderRecs(items) {
+  recs.innerHTML = "";
 
-  items.slice(0,8).forEach(v=>{
-    const el=document.createElement("div");
-    el.className="recCard";
+  items.slice(0, 8).forEach(v => {
+    const el = document.createElement("div");
+    el.className = "recCard";
 
-    el.innerHTML=`
+    el.innerHTML = `
       <img class="recThumb"
         src="https://archive.org/services/img/${v.identifier}">
       <div class="recTitle">${v.title||""}</div>
     `;
 
-    el.onclick=()=>{
-      location.hash=`#/video/${v.identifier}`;
+    el.onclick = () => {
+      location.hash = `#/video/${v.identifier}`;
     };
 
     recs.appendChild(el);
@@ -574,45 +572,56 @@ function renderRecs(items){
 
 /* ================= VIDEO ================= */
 
-async function loadVideo(id){
+async function loadVideo(id) {
   show();
 
-  document.getElementById("app").style.display="none";
-  watch.style.display="block";
-  sidebar.style.display="block";
+  videoSession++; // 🔥 force new session every video
 
-  const meta=await fetchMeta(id);
-  const m=meta.metadata||{};
-  const files=Array.isArray(meta.files)?meta.files:[];
+  document.getElementById("app").style.display = "none";
+  watch.style.display = "block";
+  sidebar.style.display = "block";
 
-  const file=files.find(f=>
-    (f?.name||"").endsWith(".mp4")
+  recs.innerHTML = ""; // 🔥 clear old recs immediately
+
+  const meta = await fetchMeta(id);
+  const m = meta.metadata || {};
+  const files = Array.isArray(meta.files) ? meta.files : [];
+
+  const file = files.find(f =>
+    (f?.name || "").endsWith(".mp4")
   );
 
-  if(file){
-    player.source={
-      type:"video",
-      sources:[{
-        src:`https://archive.org/download/${id}/${file.name}`,
-        type:"video/mp4"
+  if (file) {
+    player.source = {
+      type: "video",
+      sources: [{
+        src: `https://archive.org/download/${id}/${file.name}`,
+        type: "video/mp4"
       }]
     };
   }
 
-  titleEl.textContent=m.title||"Untitled video";
+  titleEl.textContent = m.title || "Untitled video";
 
-  videoInfo.innerHTML=`
-    <div class="infoRow">👤 ${m.uploader||"Unknown"}</div>
-    <div class="infoRow">🎬 ${m.creator||"Unknown"}</div>
-    <div class="infoRow">📅 ${m.publicdate||"Unknown"}</div>
-    <div class="desc">${m.description||"No description"}</div>
+  videoInfo.innerHTML = `
+    <div class="infoRow">👤 ${m.uploader || "Unknown"}</div>
+    <div class="infoRow">🎬 ${m.creator || "Unknown"}</div>
+    <div class="infoRow">📅 ${m.publicdate || "Unknown"}</div>
+    <div class="desc">${m.description || "No description"}</div>
   `;
 
-  let recData=[];
-  try{
-    recData=await fetchVideos(m.subject||m.creator||"movies");
-    recData=filter(recData);
-  }catch{}
+  let recData = [];
+
+  try {
+    const seed =
+      `${m.subject || ""} ${m.creator || ""} ${id} ${videoSession}`;
+
+    recData = await fetchVideos(seed);
+    recData = filter(recData);
+
+  } catch {
+    recData = [];
+  }
 
   renderRecs(recData);
 
@@ -621,14 +630,14 @@ async function loadVideo(id){
 
 /* ================= BACK ================= */
 
-document.getElementById("back").onclick=()=>{
-  location.hash="#/";
+document.getElementById("back").onclick = () => {
+  location.hash = "#/";
 };
 
-/* ================= SEARCH ================= */
+/* ================= SEARCH INPUT ================= */
 
-search.addEventListener("input",e=>{
-  location.hash=e.target.value
+search.addEventListener("input", e => {
+  location.hash = e.target.value
     ? `#/search/${encodeURIComponent(e.target.value)}`
     : "#/";
 });
@@ -636,7 +645,6 @@ search.addEventListener("input",e=>{
 /* ================= INIT ================= */
 
 route();
-
 </script>
 
 </body>
